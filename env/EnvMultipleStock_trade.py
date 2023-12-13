@@ -19,7 +19,7 @@ STOCK_DIM = 30
 TRANSACTION_FEE_PERCENT = 0.001
 
 # turbulence index: 90-150 reasonable threshold
-#TURBULENCE_THRESHOLD = 140
+TURBULENCE_THRESHOLD = 140
 REWARD_SCALING = 1e-4
 
 class StockEnvTrade(gym.Env):
