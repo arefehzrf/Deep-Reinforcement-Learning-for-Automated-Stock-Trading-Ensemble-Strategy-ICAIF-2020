@@ -95,7 +95,7 @@ class StockEnvTrain(gym.Env):
         if self.terminal:
             plt.plot(self.asset_memory,'r')
             plt.savefig('results/account_value_train.png')
-            plt.close()
+            plt.show()
             end_total_asset = self.state[0]+ \
             sum(np.array(self.state[1:(STOCK_DIM+1)])*np.array(self.state[(STOCK_DIM+1):(STOCK_DIM*2+1)]))
             
