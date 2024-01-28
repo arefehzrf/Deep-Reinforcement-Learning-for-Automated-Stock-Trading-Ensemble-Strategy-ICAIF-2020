@@ -110,7 +110,16 @@ class StockEnvTrade(gym.Env):
             self.trades+=1
         else:
             # if turbulence goes over threshold, just stop buying
-            pass
+            # if turbulence goes over threshold, buy gold instead
+            gold_index = GOLD_INDEX  # You should define GOLD_INDEX based on how gold is represented in your state
+            available_gold = self.state[0] // self.state[gold_index]
+
+              # update balance for gold purchase
+            self.state[0] -= self.state[gold_index] * min(available_gold, action) * (1 + TRANSACTION_FEE_PERCENT)
+            self.state[gold_index + STOCK_DIM + 1] += min(available_gold, action)
+        
+            self.cost += self.state[gold_index] * min(available_gold, action) * TRANSACTION_FEE_PERCENT
+            self.trades += 1
         
     def step(self, actions):
         # print(self.day)
