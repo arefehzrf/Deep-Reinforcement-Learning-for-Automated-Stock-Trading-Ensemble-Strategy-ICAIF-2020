@@ -4,12 +4,25 @@ from stockstats import StockDataFrame as Sdf
 from config import config
 
 def load_dataset(*, file_name: str) -> pd.DataFrame:
-    """
-    load csv dataset from path
-    :return: (df) pandas dataframe
-    """
-    #_data = pd.read_csv(f"{config.DATASET_DIR}/{file_name}")
+    # Load the dataset from CSV
     _data = pd.read_csv(file_name)
+
+    if add_gold_data:
+        if not start_date or not end_date:
+            raise ValueError("Start date and end date must be provided to add gold data.")
+
+        # Fetch gold price data
+        gold_data = yf.download('GC=F', start=start_date, end=end_date)['Close']
+        gold_data = gold_data.rename('gold_price')
+
+        # Aligning the gold data date index with your DataFrame
+        # Assuming your DataFrame has a 'date' column
+        _data['date'] = pd.to_datetime(_data['date'])
+        gold_data.index = pd.to_datetime(gold_data.index)
+        gold_data = gold_data.reindex(_data['date'], method='ffill')  # Forward fill for missing dates
+
+        # Merge the gold data into your existing DataFrame
+        _data = _data.join(gold_data, on='date')
     return _data
 
 def data_split(df,start,end):
