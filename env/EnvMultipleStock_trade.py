@@ -62,7 +62,41 @@ class StockEnvTrade(gym.Env):
         #self.reset()
         self._seed()
         self.model_name=model_name        
-        self.iteration=iteration
+        self.iteration=iteration        
+        self.correlation_matrix = self.compute_correlation_matrix()
+
+    def compute_correlation_matrix(self):
+        stock_prices = self.df.pivot(index='datadate', columns='tic', values='adjcp')
+        daily_returns = stock_prices.pct_change()
+        correlation_matrix = daily_returns.corr()
+        return correlation_matrix
+    
+    def get_neg_corr_stocks(self, threshold=-0.2):
+        neg_corr_stocks = []
+        for stock in self.correlation_matrix.columns:
+            avg_corr = self.correlation_matrix[stock].mean()
+            if avg_corr < threshold:
+                neg_corr_stocks.append(stock)
+        return neg_corr_stocks
+
+    def get_high_corr_stocks(self, threshold=0.5):
+        """
+        Identify stocks with an average correlation above a certain threshold, indicating
+        high positive correlation with the market or other stocks.
+    
+        :param threshold: The threshold above which a stock is considered highly correlated.
+                          Default is 0.5, but this can be adjusted based on strategy needs.
+        :return: A list of stock indices (or tickers) with high positive correlation.
+        """
+        high_corr_stocks = []
+        # Calculate the average correlation of each stock with others
+        avg_correlations = self.correlation_matrix.mean()
+        # Identify stocks whose average correlation with others is above the threshold
+        for stock, avg_corr in avg_correlations.items():
+            if avg_corr > threshold:
+                high_corr_stocks.append(stock)
+        return high_corr_stocks    
+                     
 
 
     def _sell_stock(self, index, action):
@@ -81,17 +115,16 @@ class StockEnvTrade(gym.Env):
             else:
                 pass
         else:
-            # if turbulence goes over threshold, just clear out all positions 
-            if self.state[index+STOCK_DIM+1] > 0:
-                #update balance
-                self.state[0] += self.state[index+1]*self.state[index+STOCK_DIM+1]* \
-                              (1- TRANSACTION_FEE_PERCENT)
-                self.state[index+STOCK_DIM+1] =0
-                self.cost += self.state[index+1]*self.state[index+STOCK_DIM+1]* \
-                              TRANSACTION_FEE_PERCENT
-                self.trades+=1
-            else:
-                pass
+            # Turbulent market conditions: sell high correlation stocks
+            high_corr_stocks = self.get_high_corr_stocks()
+            if self.df['tic'].iloc[index] in high_corr_stocks:
+                # Sell all holdings of high-correlation stock
+                sell_amount = self.state[index + STOCK_DIM + 1]  # Sell all holdings
+                self.state[0] += self.state[index + 1] * sell_amount * (1 - TRANSACTION_FEE_PERCENT)
+                self.state[index + STOCK_DIM + 1] = 0  # Clear the stock holding
+                self.cost += self.state[index + 1] * sell_amount * TRANSACTION_FEE_PERCENT
+                self.trades += 1
+
     
     def _buy_stock(self, index, action):
         # perform buy action based on the sign of the action
@@ -109,8 +142,23 @@ class StockEnvTrade(gym.Env):
                               TRANSACTION_FEE_PERCENT
             self.trades+=1
         else:
-            # if turbulence goes over threshold, just stop buying
-            pass
+            # if turbulence goes over threshold, buy stocks with negative correlation values
+            # Turbulent market conditions: buy stocks with negative correlation
+            neg_corr_stocks = self.get_neg_corr_stocks()
+            stock_tickers = self.df['tic'].unique()
+            if stock_tickers[index] in neg_corr_stocks:
+                # The logic here assumes that `action` can be a positive value indicating the amount to buy
+                available_amount = self.state[0] // self.state[index + 1]  # Price of the stock
+                buy_amount = min(available_amount, action)
+                transaction_cost = self.state[index + 1] * buy_amount * TRANSACTION_FEE_PERCENT
+                self.state[0] -= (self.state[index + 1] * buy_amount + transaction_cost)
+                self.state[index + STOCK_DIM + 1] += buy_amount
+                self.cost += transaction_cost
+                self.trades += 1
+            else:
+                # Optionally, skip buying if the stock is not negatively correlated
+                pass  # 
+
         
     def step(self, actions):
         # print(self.day)
